@@ -2,10 +2,12 @@
 Just change the global variables and run the script
 
 # Todos
-- Define probability of infection after contact
-- Improve curses quality
 - Import vars from INI
-- Main Class
+- Export stats to csv
+- Vaccination
+- R calculation
+- Population reborn
+- Day cycles
 
 # Dependencies
 ## Python 3.x

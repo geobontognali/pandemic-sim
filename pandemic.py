@@ -4,12 +4,18 @@ import curses
 import time
 
 ### GLOBALS
-version = "0.1a"
-population = 100
-initiallyInfected = 1
-duration = 1000
-fps = 10
+population = 400 # Initial population
+patientZero = 1 # amount
+duration = 5000 # Duration in frames
+fps = 10 # Frames per second (default 10)
+lifespan = 80 # Virus lifespan in steps
+deadlyhood = 0.1 # Deadlyhood of the virus in percentage
 
+version = "0.2a" 
+deaths = 0 
+cured = 0 
+initialPopulation = population
+infected = 0
 
 ### Main ##########################
 def main(stdscr):
@@ -33,7 +39,7 @@ def main(stdscr):
     people = []
     for pid in range(population): ## Generate population
         people.append(Person(pid))
-    for i in range(initiallyInfected): ## Patient zeros
+    for i in range(patientZero): ## Patient zeros
         people[i].infect()
 
     # Begin simulation
@@ -41,16 +47,20 @@ def main(stdscr):
     
     global frame
     frame = 0
+    ### Simulation Loop ###
     for frame in range(duration): # People do move once per frame
         for person in people:
+            if not person.alive: continue # Skip dead people
             person.move()
             GUI.addToSimPlane(person.pos[1],person.pos[0], person.symbol)
         for person in people:
+            if not person.alive: continue # Skip dead people
             person.transmitVirus(people)
         GUI.refreshSimPlane()
+        GUI.updateStats()
         time.sleep(1/fps)
+    ###
 
-    ## Terminate simulation by keypress
     GUI.setTopText("Simulation ended. Press any key to quit")
     stdscr.getkey()
 
@@ -85,7 +95,6 @@ class WindowMgr:
         self.footerWin.attron(curses.color_pair(3))    
         self.footerWin.addstr(0,0," " + self.footerText + " " * (simPlaneWidth - len(self.footerText) - 2)) 
         self.footerWin.refresh()
-        stdscr.getkey()
 
     # Changes and refreshes the text of the top bar
     def setTopText(self, message):
@@ -95,25 +104,64 @@ class WindowMgr:
 
     # Edit the simulation plane
     def addToSimPlane(self,y,x,symbol):
-        self.centerWin.addch(y,x,symbol)
+        if(symbol == "#"):
+            self.centerWin.addch(y,x,symbol, curses.color_pair(2))
+        else:
+            self.centerWin.addch(y,x,symbol)
+        
     def refreshSimPlane(self):
         self.centerWin.refresh()
         self.centerWin.clear() # Prep for the next frame
+
+    def updateStats(self):
+        self.bottomWin.nodelay(1)
+        if(self.bottomWin.getch() == ord("q")):
+            quit() 
+        
+        self.bottomWin.clear()
+        self.bottomWin.addstr(0,0,"STATS:")
+        self.bottomWin.addstr(1,0,"Infected population: " + str(infected) + "/" + str(population) + " (" + str(round(infected / population * 100,2)) + "%)")
+        self.bottomWin.addstr(2,0,"Vaccinated population: 0.0%")
+        
+        self.bottomWin.addstr(1,40,"Initial population: " + str(initialPopulation))
+        self.bottomWin.addstr(2,40,"Deaths: " + str(deaths) + " (" + str(round(deaths/initialPopulation*100,2)) + "%)")
+        self.bottomWin.addstr(3,40,"Cured: " + str(cured))
+
+
+        self.bottomWin.refresh()
 
 # Its the main moving entity
 class Person:
     def __init__(self, pid):
         self.pid = pid
-        self.virus = False
+        self.virus = None
         self.pos = [randrange(2,simPlaneWidth-2),randrange(2,simPlaneHeight-2)]
         self.symbol = "O"
+        self.vaccinated = False
+        self.alive = True
 
     def infect(self):
-        self.virus = True
+        global infected
+        infected = infected + 1
+        self.virus = Virus()
         self.symbol = "#"
+
     def cure(self):
-        self.virus = False
+        global infected
+        global cured
+        infected = infected - 1
+        cured = cured + 1
+        self.virus = None
         self.symbol = "O"
+
+    def die(self):
+        global deaths
+        global population
+        global infected
+        population = population - 1
+        deaths = deaths + 1
+        infected = infected - 1
+        self.alive = False # u dead next refresh dude
 
     def move(self):
         # Move Randomly, but keep inside city boundries
@@ -131,7 +179,21 @@ class Person:
             self.pos[1] += randrange(-1,1)
         else:
             self.pos[1] += randrange(-1,2)
+        # Virus ttl
+        self.updateViralStatus()
     
+    def updateViralStatus(self):
+        if(self.virus == None):
+            return
+        if(self.virus.ttl == 0):
+            self.rnd = randrange(0,100)
+            if((deadlyhood * 100) > self.rnd):
+                self.die()
+            else:
+                self.cure()
+        else:
+            self.virus.ttl = self.virus.ttl - 1
+
     def transmitVirus(self, people):
         if not self.virus: # if not sick dont do anything
             return
@@ -142,6 +204,11 @@ class Person:
                 continue
             if(person.pos == self.pos):
                 person.infect()
+                
+class Virus:
+    def __init__(self):
+        self.ttl = lifespan ## life left
+
 
 ### INIT
 curses.wrapper(main)
