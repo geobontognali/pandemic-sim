@@ -4,18 +4,21 @@ import curses
 import time
 
 ### GLOBALS
-population = 400 # Initial population
-patientZero = 1 # amount
+population = 300 # Initial population
+patientZero = 5 # amount
 duration = 5000 # Duration in frames
-fps = 10 # Frames per second (default 10)
+fps = 100 # Frames per second (default 10)
 lifespan = 80 # Virus lifespan in steps
 deadlyhood = 0.1 # Deadlyhood of the virus in percentage
+keepPeopleAlive = False # Dont remove dead people from the simulation, in reality dead people dont reduce the contacts per day since its a tiny percentage of the world population
 
-version = "0.2a" 
+infectionsThisFrame = []
+version = "0.3a" 
 deaths = 0 
 cured = 0 
 initialPopulation = population
 infected = 0
+rzero = 0
 
 ### Main ##########################
 def main(stdscr):
@@ -25,8 +28,9 @@ def main(stdscr):
     global footerHeight
     global simPlaneHeight
     global simPlaneWidth 
+    global rzero
     topWinHeight = 1
-    bottomWinHeight = 4
+    bottomWinHeight = 6
     footerHeight = 1
     simPlaneWidth = (stdscr.getmaxyx()[1] - 1)
     simPlaneHeight = stdscr.getmaxyx()[0] - (topWinHeight + bottomWinHeight + footerHeight)
@@ -47,15 +51,20 @@ def main(stdscr):
     
     global frame
     frame = 0
-    ### Simulation Loop ###
+    ### Simulation Loop ### 
+    # TODO: Add Simulation to own class
     for frame in range(duration): # People do move once per frame
+        infectionsThisFrame.clear() # Reset this every frame
         for person in people:
             if not person.alive: continue # Skip dead people
             person.move()
             GUI.addToSimPlane(person.pos[1],person.pos[0], person.symbol)
         for person in people:
             if not person.alive: continue # Skip dead people
-            person.transmitVirus(people)
+            person.transmitVirus(people) # If necessary, transmit the virus
+            if person.rzero > 0: infectionsThisFrame.append(person.rzero) # Sums the r zeros for later
+        
+        if(infected > 0): rzero = sum(infectionsThisFrame) / infected # calculate R zero
         GUI.refreshSimPlane()
         GUI.updateStats()
         time.sleep(1/fps)
@@ -120,13 +129,16 @@ class WindowMgr:
         
         self.bottomWin.clear()
         self.bottomWin.addstr(0,0,"STATS:")
-        self.bottomWin.addstr(1,0,"Infected population: " + str(infected) + "/" + str(population) + " (" + str(round(infected / population * 100,2)) + "%)")
-        self.bottomWin.addstr(2,0,"Vaccinated population: 0.0%")
+        self.bottomWin.addstr(1,0,"Initial population: " + str(initialPopulation))
+        self.bottomWin.addstr(2,0,"Virus deadlyhood " + str(deadlyhood * 100) + "%")
+        self.bottomWin.addstr(3,0,"Vaccinated population: ??%")
+        self.bottomWin.addstr(4,0,"Immunity effectivness: ??%")
+        self.bottomWin.addstr(5,0,"Frame: "+ str(frame))
         
-        self.bottomWin.addstr(1,40,"Initial population: " + str(initialPopulation))
+        self.bottomWin.addstr(1,40,"Infected population: " + str(infected) + "/" + str(population) + " (" + str(round(infected / population * 100,2)) + "%)")
         self.bottomWin.addstr(2,40,"Deaths: " + str(deaths) + " (" + str(round(deaths/initialPopulation*100,2)) + "%)")
         self.bottomWin.addstr(3,40,"Cured: " + str(cured))
-
+        self.bottomWin.addstr(4,40,"R zero: " + str(round(rzero,3)))
 
         self.bottomWin.refresh()
 
@@ -139,6 +151,7 @@ class Person:
         self.symbol = "O"
         self.vaccinated = False
         self.alive = True
+        self.rzero = 0
 
     def infect(self):
         global infected
@@ -158,11 +171,14 @@ class Person:
         global deaths
         global population
         global infected
-        population = population - 1
         deaths = deaths + 1
         infected = infected - 1
-        self.alive = False # u dead next refresh dude
+        self.rzero = 0
+        if not keepPeopleAlive:
+            population = population - 1
+            self.alive = False # u dead next refresh dude
 
+        
     def move(self):
         # Move Randomly, but keep inside city boundries
         # X (width)
@@ -204,6 +220,7 @@ class Person:
                 continue
             if(person.pos == self.pos):
                 person.infect()
+                self.rzero = self.rzero + 1
                 
 class Virus:
     def __init__(self):
