@@ -4,13 +4,13 @@ import curses
 import time
 
 ### GLOBALS
-population = 300 # Initial population
-patientZero = 5 # amount
+population = 400 # Initial population
+patientZero = 1 # amount
 duration = 5000 # Duration in frames
 fps = 100 # Frames per second (default 10)
 lifespan = 80 # Virus lifespan in steps
 deadlyhood = 0.1 # Deadlyhood of the virus in percentage
-keepPeopleAlive = False # Dont remove dead people from the simulation, in reality dead people dont reduce the contacts per day since its a tiny percentage of the world population
+keepPeopleAlive = True # Dont remove dead people from the simulation, in reality dead people dont reduce the contacts per day since its a tiny percentage of the world population
 
 infectionsThisFrame = []
 version = "0.3a" 
@@ -62,7 +62,7 @@ def main(stdscr):
         for person in people:
             if not person.alive: continue # Skip dead people
             person.transmitVirus(people) # If necessary, transmit the virus
-            if person.rzero > 0: infectionsThisFrame.append(person.rzero) # Sums the r zeros for later
+            if person.virus is not None: infectionsThisFrame.append(person.rzero) # Sums the r zeros for later
         
         if(infected > 0): rzero = sum(infectionsThisFrame) / infected # calculate R zero
         GUI.refreshSimPlane()
@@ -173,6 +173,8 @@ class Person:
         global infected
         deaths = deaths + 1
         infected = infected - 1
+        self.virus = None
+        self.symbol = "O"
         self.rzero = 0
         if not keepPeopleAlive:
             population = population - 1
